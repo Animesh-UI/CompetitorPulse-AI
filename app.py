@@ -1,3 +1,4 @@
+import threading
 import os
 from datetime import datetime, timezone
 from flask import Flask, jsonify, render_template, request
@@ -69,114 +70,125 @@ def scan(competitor_id):
     if not competitor:
         return jsonify({"error": "Competitor not found."}), 404
 
-    started = datetime.now(timezone.utc).isoformat()
-    result = scan_competitor(competitor["url"])
-    scan_id = save_scan(
-        competitor_id=competitor_id,
-        status=result["status"],
-        pages_checked=result.get("pages_checked", 0),
-        articles_found=len(result.get("articles", [])),
-        message=result.get("message", ""),
-        started_at=started,
-    )
-
-    new_articles = []
-    keyword_results = []
-    stored_articles = {
-        article["url"]: article
-        for article in get_articles(competitor_id, limit=100)
-    }
-    is_baseline = not stored_articles and bool(result.get("articles"))
-    for article in result.get("articles", []):
-        is_new = store_articles(competitor_id, article)
-        stored_article = stored_articles.get(article["url"], {})
-        previous_volume_error = stored_article.get("volume_error") or ""
-        should_enrich = (
-            is_new
-            or stored_article.get("volume_status") is None
-            or (
-                stored_article.get("volume_status") == "API_ERROR"
-                and previous_volume_error == "SeoData returned HTTP 404."
+    # Define the heavy scan logic as a background function
+    def run_scan_task():
+        try:
+            started = datetime.now(timezone.utc).isoformat()
+            result = scan_competitor(competitor["url"])
+            scan_id = save_scan(
+                competitor_id=competitor_id,
+                status=result["status"],
+                pages_checked=result.get("pages_checked", 0),
+                articles_found=len(result.get("articles", [])),
+                message=result.get("message", ""),
+                started_at=started,
             )
-        )
-        if should_enrich:
-            keyword = enrich_keyword(article)
 
-            article["keyword"] = keyword.get("keyword")
-            article["volume_keyword"] = keyword.get("volume_keyword")
-            article["trends_keyword"] = keyword.get("trends_keyword")
-            article["search_volume"] = keyword.get("search_volume")
-            article["trends_interest"] = keyword.get("trends_interest")
-            article["trends_series"] = keyword.get("trends_series", [])
-            article["volume_series"] = keyword.get("volume_series", [])
-            article["keyword_source"] = keyword.get("source")
-            article["keyword_status"] = keyword.get("status")
-            article["keyword_error"] = keyword.get("error")
-            article["trends_status"] = keyword.get("trends_status")
-            article["trends_error"] = keyword.get("trends_error")
-            article["volume_source"] = keyword.get("volume_source")
-            article["volume_status"] = keyword.get("volume_status")
-            article["volume_error"] = keyword.get("volume_error")
-            article["cpc"] = keyword.get("cpc")
-            article["competition"] = keyword.get("competition")
-            article["country"] = keyword.get("country")
-            article["provider_cached"] = keyword.get("provider_cached")
-            article["similar_keywords"] = keyword.get("similar_keywords", [])
-
-            update_article_keyword(competitor_id, article["url"], keyword)
-            stored_articles[article["url"]] = {
-                **stored_article,
-                "volume_status": keyword.get("volume_status"),
+            new_articles = []
+            keyword_results = []
+            stored_articles = {
+                article["url"]: article
+                for article in get_articles(competitor_id, limit=100)
             }
-            keyword_results.append({
-                "url": article["url"],
-                "keyword": keyword.get("volume_keyword") or keyword.get("keyword"),
-                "search_volume": keyword.get("search_volume"),
-                "cpc": keyword.get("cpc"),
-                "competition": keyword.get("competition"),
-                "volume_status": keyword.get("volume_status"),
-                "volume_error": keyword.get("volume_error"),
-                "trends_interest": keyword.get("trends_interest"),
-                "trends_status": keyword.get("trends_status"),
-            })
-
-        if is_new and not is_baseline:
-            event_id = create_event(
-                competitor_id, "new_article",
-                f"New article detected: {article.get('title') or article['url']}",
-                article.get("url"), article.get("title"), keyword
-            )
-            if event_id:
-                new_articles.append(article)
+            is_baseline = not stored_articles and bool(result.get("articles"))
             
-    pricing_result = extract_pricing(competitor["url"])
-    pricing_changes = []
-    if pricing_result.get("status") == "SUCCESS":
-        for plan in pricing_result.get("plans", []):
-            changed = store_pricing_snapshot(competitor_id, plan)
-            if changed:
-                pricing_changes.append(plan)
-                create_event(
-                    competitor_id, "pricing_change",
-                    f"Pricing changed: {plan.get('plan_name')} — {plan.get('price_text')}",
-                    plan.get("source_url"), plan.get("plan_name"), {}
+            for article in result.get("articles", []):
+                is_new = store_articles(competitor_id, article)
+                stored_article = stored_articles.get(article["url"], {})
+                previous_volume_error = stored_article.get("volume_error") or ""
+                should_enrich = (
+                    is_new
+                    or stored_article.get("volume_status") is None
+                    or (
+                        stored_article.get("volume_status") == "API_ERROR"
+                        and previous_volume_error == "SeoData returned HTTP 404."
+                    )
                 )
+                
+                keyword = {} # Initialize to prevent UnboundLocalError
+                if should_enrich:
+                    keyword = enrich_keyword(article)
 
-    alert_result = {"sent": False, "reason": "No new content or pricing changes."}
-    if new_articles or pricing_changes:
-        alert_result = send_slack_alert(competitor, new_articles, pricing_changes)
+                    article["keyword"] = keyword.get("keyword")
+                    article["volume_keyword"] = keyword.get("volume_keyword")
+                    article["trends_keyword"] = keyword.get("trends_keyword")
+                    article["search_volume"] = keyword.get("search_volume")
+                    article["trends_interest"] = keyword.get("trends_interest")
+                    article["trends_series"] = keyword.get("trends_series", [])
+                    article["volume_series"] = keyword.get("volume_series", [])
+                    article["keyword_source"] = keyword.get("source")
+                    article["keyword_status"] = keyword.get("status")
+                    article["keyword_error"] = keyword.get("error")
+                    article["trends_status"] = keyword.get("trends_status")
+                    article["trends_error"] = keyword.get("trends_error")
+                    article["volume_source"] = keyword.get("volume_source")
+                    article["volume_status"] = keyword.get("volume_status")
+                    article["volume_error"] = keyword.get("volume_error")
+                    article["cpc"] = keyword.get("cpc")
+                    article["competition"] = keyword.get("competition")
+                    article["country"] = keyword.get("country")
+                    article["provider_cached"] = keyword.get("provider_cached")
+                    article["similar_keywords"] = keyword.get("similar_keywords", [])
 
+                    update_article_keyword(competitor_id, article["url"], keyword)
+                    stored_articles[article["url"]] = {
+                        **stored_article,
+                        "volume_status": keyword.get("volume_status"),
+                    }
+                    keyword_results.append({
+                        "url": article["url"],
+                        "keyword": keyword.get("volume_keyword") or keyword.get("keyword"),
+                        "search_volume": keyword.get("search_volume"),
+                        "cpc": keyword.get("cpc"),
+                        "competition": keyword.get("competition"),
+                        "volume_status": keyword.get("volume_status"),
+                        "volume_error": keyword.get("volume_error"),
+                        "trends_interest": keyword.get("trends_interest"),
+                        "trends_status": keyword.get("trends_status"),
+                    })
+
+                if is_new and not is_baseline:
+                    event_id = create_event(
+                        competitor_id, "new_article",
+                        f"New article detected: {article.get('title') or article['url']}",
+                        article.get("url"), article.get("title"), keyword
+                    )
+                    if event_id:
+                        new_articles.append(article)
+                        
+            pricing_result = extract_pricing(competitor["url"])
+            pricing_changes = []
+            if pricing_result.get("status") == "SUCCESS":
+                for plan in pricing_result.get("plans", []):
+                    changed = store_pricing_snapshot(competitor_id, plan)
+                    if changed:
+                        pricing_changes.append(plan)
+                        create_event(
+                            competitor_id, "pricing_change",
+                            f"Pricing changed: {plan.get('plan_name')} — {plan.get('price_text')}",
+                            plan.get("source_url"), plan.get("plan_name"), {}
+                        )
+
+            alert_result = {"sent": False, "reason": "No new content or pricing changes."}
+            if new_articles or pricing_changes:
+                alert_result = send_slack_alert(competitor, new_articles, pricing_changes)
+            
+            # Print to Render logs so you can see it finished
+            print(f"[SCAN SUCCESS] Finished scanning {competitor['name']}. Found {len(result.get('articles', []))} articles.", flush=True)
+
+        except Exception as e:
+            print(f"[SCAN ERROR] Background scan failed for {competitor['name']}: {e}", flush=True)
+
+    # Start the function in a background thread
+    thread = threading.Thread(target=run_scan_task)
+    thread.daemon = True
+    thread.start()
+
+    # Immediately return a 202 Accepted response to the frontend
     return jsonify({
-        "scan_id": scan_id,
-        "status": result["status"],
-        "message": result.get("message", ""),
-        "pages_checked": result.get("pages_checked", 0),
-        "articles_found": len(result.get("articles", [])),
-        "keyword_results": keyword_results,
-        "new_articles": new_articles,
-        "pricing_changes": pricing_changes,
-        "alert": alert_result,
-    })
+        "status": "SCANNING",
+        "message": "Scan started in the background. Please refresh the dashboard in 1-2 minutes."
+    }), 202
 
 @app.post("/api/competitors/<int:competitor_id>/trends/refresh")
 def refresh_trends(competitor_id):
