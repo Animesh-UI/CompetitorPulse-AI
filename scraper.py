@@ -2,6 +2,8 @@ import ipaddress
 import json
 import re
 import socket
+import functools
+import concurrent.futures
 from urllib.robotparser import RobotFileParser
 from urllib.parse import (
     parse_qsl,
@@ -14,7 +16,6 @@ from urllib.parse import (
 import requests
 from bs4 import BeautifulSoup
 from xml.etree import ElementTree
-
 
 USER_AGENT = "CompetitorPulseBot/1.1 (+public-page monitoring; respectful crawler)"
 TIMEOUT = 12
@@ -42,6 +43,8 @@ MONTH_ARCHIVE_RE = re.compile(r"^/\d{4}/\d{1,2}/?$")
 YEAR_ARCHIVE_RE = re.compile(r"^/\d{4}/?$")
 
 
+# OPTIMIZATION: Cache DNS resolutions to speed up multiple requests to the same host
+@functools.lru_cache(maxsize=256)
 def _safe_public_url(url):
     """Accept only public HTTP(S) URLs and reject local/private destinations."""
     try:
@@ -59,7 +62,6 @@ def _safe_public_url(url):
         ):
             return False
 
-        # Literal IP addresses are checked directly; domain names are resolved.
         try:
             ip = ipaddress.ip_address(host)
             return ip.is_global
@@ -105,10 +107,7 @@ def _canonical(url):
 
 
 def _get(url):
-    """
-    Fetch a public URL while validating each redirect before following it.
-    This avoids automatically following redirects to private/local addresses.
-    """
+    """Fetch a public URL while validating each redirect."""
     current_url = url
     session = requests.Session()
 
@@ -128,7 +127,6 @@ def _get(url):
             )
 
             if response.status_code not in (301, 302, 303, 307, 308):
-                # Read a bounded response body to avoid excessive memory use.
                 chunks = []
                 size = 0
                 for chunk in response.iter_content(chunk_size=65536):
@@ -172,7 +170,6 @@ def _same_domain(url, base_host):
 
 
 def _flatten_jsonld(value):
-    """Flatten JSON-LD lists and @graph structures."""
     output = []
     if isinstance(value, list):
         for item in value:
@@ -181,7 +178,6 @@ def _flatten_jsonld(value):
         output.append(value)
         if value.get("@graph"):
             output.extend(_flatten_jsonld(value["@graph"]))
-        # Some pages wrap schema objects in mainEntity or itemListElement.
         for key in ("mainEntity", "itemListElement", "subjectOf"):
             if value.get(key):
                 output.extend(_flatten_jsonld(value[key]))
@@ -208,7 +204,6 @@ def _schema_types(obj):
 
 
 def _parse_date(soup, jsonld_objects):
-    # Prefer dates explicitly associated with an Article/BlogPosting schema.
     for obj in jsonld_objects:
         if _schema_types(obj) & ARTICLE_TYPES:
             for key in ("datePublished", "dateCreated", "dateModified"):
@@ -230,7 +225,6 @@ def _parse_date(soup, jsonld_objects):
 
 
 def _extract_article(page_url, soup):
-    """Extract article metadata from Open Graph, JSON-LD and HTML fallbacks."""
     jsonld = _jsonld_objects(soup)
     article_objects = [
         obj for obj in jsonld if _schema_types(obj) & ARTICLE_TYPES
@@ -296,28 +290,21 @@ def _extract_article(page_url, soup):
 
 
 def _is_archive_url(url):
-    """Reject date-based archive pages such as /blog/2026/08."""
     parsed = urlparse(url)
     path = parsed.path.lower()
     parts = [part for part in path.split("/") if part]
 
     if MONTH_ARCHIVE_RE.match(path) or YEAR_ARCHIVE_RE.match(path):
         return True
-
-    # Common WordPress/month archive forms: /blog/2026/08 and /blog/2026/08/.
     if len(parts) >= 2 and parts[-2].isdigit() and len(parts[-2]) == 4:
         if parts[-1].isdigit() and 1 <= int(parts[-1]) <= 12:
             return True
-
-    # Explicit archive/category pages are not individual articles.
     if any(part in {"category", "categories", "tag", "tags", "author", "page", "archive", "archives"} for part in parts):
         return True
-
     return False
 
 
 def _looks_like_content_url(url):
-    """Heuristic filter for likely individual content URLs, not archive pages."""
     parsed = urlparse(url)
     path = parsed.path.lower().rstrip("/")
     if not path or path == "/" or _is_archive_url(url):
@@ -328,20 +315,15 @@ def _looks_like_content_url(url):
         return False
 
     if any(marker in path + "/" for marker in CONTENT_HINTS):
-        # A bare blog/news/resources root is a listing page, not an article.
         if len(parts) <= 1:
             return False
         if parts[-1] in {"blog", "blogs", "news", "resources", "insights", "articles", "posts"}:
             return False
         return True
-
-    # Generic article-like paths can have two or more path segments, but
-    # exclude date archives and obvious utility pages above.
     return len(parts) >= 2
 
 
 def _sitemap_urls(base_url, robots_text=None):
-    """Read sitemap URLs, including a limited number of sitemap-index children."""
     parsed = urlparse(base_url)
     base_host = parsed.hostname or ""
     candidates = [
@@ -369,7 +351,9 @@ def _sitemap_urls(base_url, robots_text=None):
         if sitemap_url in seen_sitemaps:
             continue
         seen_sitemaps.add(sitemap_url)
-        if len(seen_sitemaps) > 6:
+        
+        # OPTIMIZATION: Only check a maximum of 2 sitemaps instead of 6
+        if len(seen_sitemaps) > 2:
             break
 
         try:
@@ -386,7 +370,6 @@ def _sitemap_urls(base_url, robots_text=None):
             if element.tag.lower().endswith("loc") and element.text
         ]
 
-        # Sitemap index: follow a small number of same-domain child sitemaps.
         child_sitemaps = [
             loc for loc in locs
             if loc.lower().split("?", 1)[0].endswith(".xml")
@@ -396,9 +379,11 @@ def _sitemap_urls(base_url, robots_text=None):
             loc for loc in locs
             if not loc.lower().split("?", 1)[0].endswith(".xml")
             and _same_domain(loc, base_host)
+            and _looks_like_content_url(loc) # OPTIMIZATION: Filter early
         ]
 
-        for child_url in child_sitemaps[:4]:
+        # OPTIMIZATION: Only check a maximum of 2 child sitemaps instead of 4
+        for child_url in child_sitemaps[:2]:
             try:
                 child_response = _get(child_url)
                 if child_response.status_code >= 400:
@@ -409,7 +394,7 @@ def _sitemap_urls(base_url, robots_text=None):
                 for element in child_root.iter():
                     if element.tag.lower().endswith("loc") and element.text:
                         child_loc = element.text.strip()
-                        if _same_domain(child_loc, base_host):
+                        if _same_domain(child_loc, base_host) and _looks_like_content_url(child_loc):
                             page_urls.append(child_loc)
             except Exception:
                 continue
@@ -417,8 +402,10 @@ def _sitemap_urls(base_url, robots_text=None):
         for page_url in page_urls:
             if _same_domain(page_url, base_host):
                 urls.append(page_url)
-                if len(urls) >= 250:
-                    return list(dict.fromkeys(urls))
+        
+        # OPTIMIZATION: If we already have enough URLs, stop crawling sitemaps
+        if len(urls) >= 20:
+            return list(dict.fromkeys(urls))
 
     return list(dict.fromkeys(urls))
 
@@ -446,11 +433,9 @@ def _robots_policy(url):
 
 
 def _is_probable_article(data, soup, source_url):
-    """Avoid treating archive pages, generic homepages and empty shells as posts."""
     if not data.get("title") or _is_archive_url(data.get("url", source_url)):
         return False
 
-    # Reject taxonomy/category pages that append "Archives" to the title
     title_lower = data.get("title", "").lower()
     if title_lower.endswith(" archives") or title_lower.endswith(" archive"):
         return False
@@ -572,42 +557,52 @@ def scan_competitor(base_url):
                 permitted_candidates.append(url)
             else:
                 disallowed_candidates += 1
+                
         candidates = permitted_candidates[: MAX_PAGES - 1]
-        articles = []
-        blocked_pages = 0
-        failed_pages = 0
-
-        for url in candidates:
+        
+        # OPTIMIZATION: Fetch article pages concurrently
+        def fetch_and_extract(url):
             try:
                 page_response = _get(url)
-                result["pages_checked"] += 1
-
                 if page_response.status_code in (401, 403, 429):
-                    blocked_pages += 1
-                    continue
+                    return ("blocked", None, True)
                 if (
                     page_response.status_code >= 400
-                    or "text/html" not in page_response.headers.get(
-                        "content-type", "text/html"
-                    ).lower()
+                    or "text/html" not in page_response.headers.get("content-type", "text/html").lower()
                 ):
-                    failed_pages += 1
-                    continue
+                    return ("failed", None, True)
 
                 soup = BeautifulSoup(page_response.text, "html.parser")
                 data = _extract_article(page_response.url, soup)
 
                 if _is_probable_article(data, soup, url):
-                    articles.append(data)
-            except ValueError:
-                # Unsafe URL or redirect; do not follow it.
-                failed_pages += 1
-            except requests.RequestException:
-                failed_pages += 1
+                    return ("success", data, True)
+                return ("failed", None, True)
             except Exception:
-                failed_pages += 1
+                return ("failed", None, False)
 
-        # De-duplicate canonical URLs while preserving discovery order.
+        articles = []
+        blocked_pages = 0
+        failed_pages = 0
+        checked_count = 1
+
+        # Use 4 threads to fetch the pages in parallel
+        with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
+            future_to_url = {executor.submit(fetch_and_extract, url): url for url in candidates}
+            for future in concurrent.futures.as_completed(future_to_url):
+                status, data, was_checked = future.result()
+                if was_checked:
+                    checked_count += 1
+                
+                if status == "blocked":
+                    blocked_pages += 1
+                elif status == "failed":
+                    failed_pages += 1
+                elif status == "success":
+                    articles.append(data)
+
+        result["pages_checked"] = checked_count
+
         unique_articles = []
         seen_urls = set()
         for article in articles:
