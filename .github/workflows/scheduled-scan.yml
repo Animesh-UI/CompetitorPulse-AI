@@ -1,0 +1,10 @@
+name: Scheduled competitor scan
+on:
+  schedule: [{cron: "0 6 * * 1"}]   # every Monday 06:00 UTC
+  workflow_dispatch:
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger scan of all competitors
+        run: curl -fsS -X POST "${{ secrets.APP_URL }}/api/cron/scan-all?token=${{ secrets.CRON_TOKEN }}"

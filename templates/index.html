@@ -1,0 +1,344 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#10141d">
+  <meta name="description" content="CompetitorPulse AI — competitor content, keyword and pricing intelligence.">
+  <meta name="color-scheme" content="dark light">
+  <title>CompetitorPulse AI | Intelligence Console</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+
+<body>
+  <div class="app-shell">
+    <aside class="sidebar" aria-label="Main sidebar">
+      <a class="brand" href="#overview" aria-label="CompetitorPulse home">
+        <span class="brand-mark" aria-hidden="true">CP</span>
+        <span class="brand-copy">
+          <strong>CompetitorPulse</strong>
+          <small>INTELLIGENCE SYSTEM</small>
+        </span>
+      </a>
+
+      <div class="sidebar-label">WORKSPACE</div>
+      <nav class="side-nav" aria-label="Main navigation">
+        <a class="nav-item active" href="#overview" aria-current="page">
+          <span class="nav-icon" aria-hidden="true">◈</span><span class="nav-text">Overview</span>
+          <span class="nav-indicator" aria-hidden="true"></span>
+        </a>
+        <a class="nav-item" href="#competitors">
+          <span class="nav-icon" aria-hidden="true">◎</span><span class="nav-text">Competitors</span>
+        </a>
+        <a class="nav-item" href="#activity">
+          <span class="nav-icon" aria-hidden="true">◷</span><span class="nav-text">Activity feed</span>
+        </a>
+        <a class="nav-item" href="#keyword-trends">
+          <span class="nav-icon" aria-hidden="true">⌁</span><span class="nav-text">Keyword intelligence</span>
+        </a>
+        <a class="nav-item" href="#pricing">
+          <span class="nav-icon" aria-hidden="true">◇</span><span class="nav-text">Pricing watch</span>
+        </a>
+        <a class="nav-item" href="#articles">
+          <span class="nav-icon" aria-hidden="true">▤</span><span class="nav-text">Article library</span>
+        </a>
+      </nav>
+
+      <div class="sidebar-spacer"></div>
+
+      <section class="system-card" aria-label="System status">
+        <div class="system-heading">
+          <span class="status-light" aria-hidden="true"></span>
+          <span>SYSTEM STATUS</span>
+        </div>
+        <strong>Monitoring console</strong>
+        <p>Manual scans · Public pages</p>
+        <div class="system-rule"></div>
+        <div class="system-foot">
+          <span>Local timezone</span>
+          <time id="localClock" aria-label="Local time">--:--</time>
+        </div>
+      </section>
+
+      <div class="sidebar-footer">
+        <span class="brand-mini" aria-hidden="true">CP</span>
+        <span class="sidebar-footer-name">CompetitorPulse AI</span>
+        <span class="version">POC</span>
+      </div>
+    </aside>
+
+    <main class="main-content" id="main-content">
+      <header class="topbar">
+        <div class="breadcrumb" aria-label="Breadcrumb">
+          <span>WORKSPACE</span>
+          <span class="breadcrumb-separator" aria-hidden="true">/</span>
+          <strong>Overview</strong>
+        </div>
+
+        <div class="topbar-actions">
+          <label class="global-search">
+            <span aria-hidden="true">⌕</span>
+            <input id="globalSearch" type="search" placeholder="Search competitors, articles..." aria-label="Search dashboard">
+            <kbd aria-hidden="true">⌕</kbd>
+          </label>
+
+          <button id="themeToggle" class="icon-button" type="button"
+                  aria-label="Switch appearance" title="Switch appearance">
+            <span aria-hidden="true">☼</span>
+          </button>
+
+          <span class="top-status"><i aria-hidden="true"></i> CONSOLE READY</span>
+        </div>
+      </header>
+
+      <div class="page-content">
+        <section class="hero" id="overview" aria-labelledby="page-title">
+          <div class="hero-copy">
+            <div class="eyebrow">
+              <span class="eyebrow-dot" aria-hidden="true"></span>
+              MARKET INTELLIGENCE
+            </div>
+            <h1 id="page-title">Stay one step <span>ahead.</span></h1>
+            <p>Monitor competitor content, discover keyword opportunities, and track visible pricing changes from one intelligence console.</p>
+            <div class="hero-meta">
+              <span class="mini-status" aria-hidden="true"></span>
+              <span>PUBLIC-WEB MONITORING</span>
+              <span class="meta-divider" aria-hidden="true">•</span>
+              <span>MANUAL SCANNING</span>
+            </div>
+          </div>
+          <div class="hero-actions">
+            <button id="refreshBtn" class="btn btn-secondary" type="button">
+              <span class="btn-symbol" aria-hidden="true">↻</span> Refresh dashboard
+            </button>
+            <button id="exportBtn" class="btn btn-primary" type="button">
+              <span class="btn-symbol" aria-hidden="true">↓</span> Export articles CSV
+            </button>
+          </div>
+        </section>
+
+        <section class="stats-grid" aria-label="Monitoring statistics">
+          <article class="stat-card">
+            <div class="stat-top">
+              <span class="stat-label">COMPETITORS</span>
+              <span class="stat-icon" aria-hidden="true">◎</span>
+            </div>
+            <strong id="statCompetitors">0</strong>
+            <div class="stat-bottom"><span class="stat-dot blue" aria-hidden="true"></span><span>Tracked websites</span></div>
+          </article>
+          <article class="stat-card">
+            <div class="stat-top">
+              <span class="stat-label">ARTICLES TRACKED</span>
+              <span class="stat-icon" aria-hidden="true">▤</span>
+            </div>
+            <strong id="statArticles">0</strong>
+            <div class="stat-bottom"><span class="stat-dot green" aria-hidden="true"></span><span>Saved in your history</span></div>
+          </article>
+          <article class="stat-card">
+            <div class="stat-top">
+              <span class="stat-label">EVENTS · 7 DAYS</span>
+              <span class="stat-icon" aria-hidden="true">⌁</span>
+            </div>
+            <strong id="statEvents">0</strong>
+            <div class="stat-bottom"><span class="stat-dot amber" aria-hidden="true"></span><span>Content and price changes</span></div>
+          </article>
+          <article class="stat-card">
+            <div class="stat-top">
+              <span class="stat-label">SCANS RUN</span>
+              <span class="stat-icon" aria-hidden="true">◷</span>
+            </div>
+            <strong id="statScans">0</strong>
+            <div class="stat-bottom"><span class="stat-dot violet" aria-hidden="true"></span><span>Manual scan history</span></div>
+          </article>
+        </section>
+
+        <section class="panel add-panel" aria-labelledby="add-title">
+          <div class="panel-heading">
+            <div>
+              <div class="section-kicker">NEW TARGET</div>
+              <h2 id="add-title">Add a competitor</h2>
+              <p class="muted">Register a public website to start monitoring.</p>
+            </div>
+            <span class="panel-badge"><span class="status-light" aria-hidden="true"></span> READY</span>
+          </div>
+
+          <form id="addForm" class="add-form">
+            <label for="competitorName">
+              <span>Competitor name</span>
+              <input id="competitorName" name="competitorName" required maxlength="100" autocomplete="organization" placeholder="e.g. Acme Analytics">
+            </label>
+            <label for="competitorUrl">
+              <span>Website URL</span>
+              <input id="competitorUrl" name="competitorUrl" required type="url" inputmode="url" autocomplete="url" placeholder="https://example.com">
+            </label>
+            <button class="btn btn-primary" type="submit"><span class="btn-symbol" aria-hidden="true">＋</span> Add target</button>
+          </form>
+          <p id="formMessage" class="message" role="status" aria-live="polite"></p>
+        </section>
+
+        <section class="panel" id="competitors" aria-labelledby="competitors-title">
+          <div class="panel-heading">
+            <div>
+              <div class="section-kicker">MONITORING NETWORK</div>
+              <h2 id="competitors-title">Your competitors</h2>
+              <p class="muted">Run a scan to compare public pages with saved history.</p>
+            </div>
+            <span id="competitorCount" class="pill">0 websites</span>
+          </div>
+
+          <div class="table-toolbar">
+            <label class="inset-search" for="competitorSearch">
+              <span aria-hidden="true">⌕</span>
+              <input id="competitorSearch" type="search" placeholder="Filter competitor list..." aria-label="Filter competitors">
+            </label>
+            <span class="toolbar-note">Select a target to inspect its data below.</span>
+          </div>
+
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th scope="col">COMPETITOR</th><th scope="col">LAST SCAN</th><th scope="col">STATUS</th><th scope="col">ACTIONS</th></tr></thead>
+              <tbody id="competitorRows">
+                <tr><td colspan="4" class="empty">No competitors yet. Add one above to get started.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="content-grid" id="activity" aria-label="Activity and workflow">
+          <section class="panel" aria-labelledby="activity-title">
+            <div class="panel-heading">
+              <div>
+                <div class="section-kicker">LIVE INTELLIGENCE</div>
+                <h2 id="activity-title">Recent activity</h2>
+                <p class="muted">Detected changes from your scans.</p>
+              </div>
+              <span class="live-chip"><span aria-hidden="true"></span> ACTIVITY</span>
+            </div>
+            <div class="activity-toolbar">
+              <label class="sr-only" for="activityFilter">Filter activity</label>
+              <select id="activityFilter" class="compact-select">
+                <option value="all">All activity</option>
+                <option value="article">New content</option>
+                <option value="pricing">Pricing changes</option>
+              </select>
+            </div>
+            <div id="eventsList" class="events-list" aria-live="polite">
+              <p class="empty">No events yet. Scan a competitor to begin.</p>
+            </div>
+          </section>
+
+          <section class="panel workflow-panel" aria-labelledby="workflow-title">
+            <div class="panel-heading">
+              <div>
+                <div class="section-kicker">SYSTEM PIPELINE</div>
+                <h2 id="workflow-title">How it works</h2>
+                <p class="muted">From discovery to actionable intelligence.</p>
+              </div>
+              <span class="workflow-mark" aria-hidden="true">CP</span>
+            </div>
+            <ol class="steps">
+              <li><span class="step-number">01</span><div><b>Discover</b><span>Read public links, robots.txt and sitemaps where accessible.</span></div></li>
+              <li><span class="step-number">02</span><div><b>Compare</b><span>Persist article URLs and pricing snapshots to detect changes.</span></div></li>
+              <li><span class="step-number">03</span><div><b>Enrich</b><span>Generate candidate keywords and retrieve available search metrics.</span></div></li>
+              <li><span class="step-number">04</span><div><b>Notify</b><span>Send configured alerts when new content or pricing changes are detected.</span></div></li>
+            </ol>
+            <div class="notice">
+              <span class="notice-icon" aria-hidden="true">ⓘ</span>
+              <p>Keyword suggestions are derived from article titles. Search volume and Google Trends interest are different metrics; unavailable data is not treated as zero.</p>
+            </div>
+          </section>
+        </section>
+
+        <section class="panel trend-panel" id="keyword-trends" aria-labelledby="trends-title">
+          <div class="panel-heading trend-heading">
+            <div>
+              <div class="section-kicker">SEARCH INTELLIGENCE</div>
+              <h2 id="trends-title">Competitor keyword trends</h2>
+              <p class="muted">Compare keyword metrics and relative search interest for articles discovered on a competitor's website.</p>
+            </div>
+            <div class="trend-actions">
+              <label class="sr-only" for="trendCompetitor">Trend competitor</label>
+              <select id="trendCompetitor" name="trendCompetitor">
+                <option value="">Select competitor</option>
+              </select>
+              <button id="refreshTrendBtn" class="btn btn-secondary" type="button" disabled>↻ Refresh data</button>
+            </div>
+          </div>
+          <div class="trend-legend">
+            <span><i class="legend-dot blue" aria-hidden="true"></i> Search metrics</span>
+            <span><i class="legend-dot amber" aria-hidden="true"></i> Relative interest</span>
+          </div>
+          <div class="trend-scroll">
+            <div class="trend-columns" aria-hidden="true">
+              <span>KEYWORD FROM ARTICLE</span><span>SEARCH VOLUME</span><span>CPC</span><span>COMPETITION</span><span>TRENDS · 0–100</span><span>PROVIDER</span><span>HISTORY</span>
+            </div>
+            <div id="trendRows" class="trend-rows" aria-live="polite">
+              <p class="empty">Select a competitor to see its keyword data.</p>
+            </div>
+          </div>
+          <p class="data-footnote">Search metrics depend on the configured provider and account access. Google Trends provides relative interest, not monthly search volume.</p>
+        </section>
+
+        <section class="panel" id="articles" aria-labelledby="articles-title">
+          <div class="panel-heading">
+            <div>
+              <div class="section-kicker">CONTENT INTELLIGENCE</div>
+              <h2 id="articles-title">Article library</h2>
+              <p class="muted">Review stored article metadata and keyword enrichment.</p>
+            </div>
+            <label class="select-with-label" for="articleCompetitor">
+              <span>COMPETITOR</span>
+              <select id="articleCompetitor" name="articleCompetitor">
+                <option value="">Select competitor</option>
+              </select>
+            </label>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th scope="col">ARTICLE</th><th scope="col">PUBLISHED</th><th scope="col">TARGET KEYWORD</th><th scope="col">TRENDS · 0–100</th><th scope="col">FIRST SEEN</th></tr></thead>
+              <tbody id="articleRows">
+                <tr><td colspan="5" class="empty">Select a competitor.</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p class="data-footnote">A dash means that a metric was not returned or is unavailable. A candidate keyword is a suggestion, not a verified target keyword.</p>
+        </section>
+
+        <section class="panel" id="pricing" aria-labelledby="pricing-title">
+          <div class="panel-heading">
+            <div>
+              <div class="section-kicker">COMMERCIAL INTELLIGENCE</div>
+              <h2 id="pricing-title">Pricing watch</h2>
+              <p class="muted">Inspect visible pricing pages and changes detected by the crawler.</p>
+            </div>
+            <label class="select-with-label" for="pricingCompetitor">
+              <span>COMPETITOR</span>
+              <select id="pricingCompetitor" name="pricingCompetitor">
+                <option value="">Select competitor</option>
+              </select>
+            </label>
+          </div>
+          <div id="pricingList" class="pricing-list" aria-live="polite">
+            <p class="empty">Select a competitor to inspect pricing snapshots.</p>
+          </div>
+          <p class="data-footnote">Content changes do not always mean prices changed. Dynamic pages and pages blocked to crawlers may not be readable.</p>
+        </section>
+
+        <footer class="page-footer">
+          <div class="footer-brand"><span aria-hidden="true">CP</span> CompetitorPulse AI</div>
+          <span>Public-page monitoring · Respect site terms and crawl restrictions</span>
+          <span class="footer-version">POC BUILD</span>
+        </footer>
+      </div>
+    </main>
+  </div>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+  <script src="{{ url_for('static', filename='app.js') }}"></script>
+  <script src="{{ url_for('static', filename='ui-enhancements.js') }}"></script>
+</body>
+</html>
